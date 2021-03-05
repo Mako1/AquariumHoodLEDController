@@ -1,7 +1,8 @@
-import sys, requests, json, threading
+import sys, requests, json, threading, pigpio
 from datetime import datetime, timedelta
-from time import time
+from time import time, sleep
 
+GPIO_NUM = 18
 SWITCH_ON = "on"
 SWITCH_OFF = "off"
 
@@ -79,13 +80,11 @@ def action():
   global IsOn, CurrCycle
   if IsOn == 1:
     CurrCycle += 1
-    #go up
-    #if CurrCycle = 255 turn on and quit
+    pi.set_PWM_dutycycle(GPIO_NUM, CurrCycle)
   else:
     CurrCycle -= 1
-    #go down
-    #if CurrCycle = 0 turn off and quit
-  
+    pi.set_PWM_dutycycle(GPIO_NUM, CurrCycle)
+
   print('action ! -> Freq : {:.1f}s - Cycle = {} - Time = {}'.format(time()-StartTime, CurrCycle, datetime.now().time()))
 
 def go():
@@ -115,9 +114,19 @@ schedStart = convert_time(Phases[StartAttr])
 if Phases[StartAttr].rfind("P") > 0:
   schedStart = schedStart  + timedelta(hours=12)
 
+pi = pigpio.pi()
 
 #print (schedStart.time().strftime("%H:%M:%S"))
 #print(datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0))
 #x = get_time_delta(Phases[StartAttr], Phases[EndAttr]) * 60
 #print(round(x / 255, 4))
 go()
+
+#pi.set_PWM_dutycycle(GPIO_NUM, 1)
+#sleep(3)
+#pi.set_PWM_dutycycle(GPIO_NUM, 25)
+#sleep(3)
+#pi.set_PWM_dutycycle(GPIO_NUM, 50)
+#sleep(3)
+#pi.set_PWM_dutycycle(GPIO_NUM, 75)
+
