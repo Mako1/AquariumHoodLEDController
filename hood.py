@@ -1,4 +1,5 @@
 import sys, requests, json, threading, pigpio
+from apscheduler.schedulers.blocking import BlockingScheduler
 from datetime import datetime, timedelta
 from time import time, sleep
 
@@ -43,7 +44,7 @@ class setInterval :
 
 def get_phases():
   response = requests.get(PHASE_API_URL)
-  print(response.json())
+  #print(response.json())
   r = json.loads(response.text)
   return r["results"]
 
@@ -116,17 +117,10 @@ if Phases[StartAttr].rfind("P") > 0:
 
 pi = pigpio.pi()
 
-#print (schedStart.time().strftime("%H:%M:%S"))
-#print(datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0))
-#x = get_time_delta(Phases[StartAttr], Phases[EndAttr]) * 60
-#print(round(x / 255, 4))
-go()
+print("Start time: {}".format(datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0)))
 
-#pi.set_PWM_dutycycle(GPIO_NUM, 1)
-#sleep(3)
-#pi.set_PWM_dutycycle(GPIO_NUM, 25)
-#sleep(3)
-#pi.set_PWM_dutycycle(GPIO_NUM, 50)
-#sleep(3)
-#pi.set_PWM_dutycycle(GPIO_NUM, 75)
+scheduledStart = datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0)
+sched = BlockingScheduler()
+sched.add_job(go, 'date', run_date=scheduledStart)
+sched.start()
 
