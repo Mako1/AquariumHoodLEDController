@@ -52,17 +52,17 @@ def convert_time(time_str):
   return datetime.strptime(time_str, '%H:%M:%S %p')
   
 def get_time_delta(start, end):
-  #add 20 min to sunrise and sunset?
+  #add 20 min to sunrise and sunset
   startTime = convert_time(start)
   endTime = convert_time(end) + timedelta(minutes=20)
   diff = endTime - startTime
   return round(diff.total_seconds() / 60)
 
-def convert_time_to_24hour(time):
-  if time_str.rfind("P"):
-    return time + timedelta(hours=12)
+def convert_time_to_24hour(timeObj):
+  if Phases[StartAttr].rfind("P") > 0:
+    return timeObj + timedelta(hours=12)
   else:
-    return time 
+    return timeObj
 
 def set_action(switch):
   global StartAttr, EndAttr, IsOn, CurrCycle
@@ -81,12 +81,15 @@ def action():
   global IsOn, CurrCycle
   if IsOn == 1:
     CurrCycle += 1
-    pi.set_PWM_dutycycle(GPIO_NUM, CurrCycle)
+    set_duty_cycle(CurrCycle)
   else:
     CurrCycle -= 1
-    pi.set_PWM_dutycycle(GPIO_NUM, CurrCycle)
+    set_duty_cycle(CurrCycle)
 
   print('action ! -> Freq : {:.1f}s - Cycle = {} - Time = {}'.format(time()-StartTime, CurrCycle, datetime.now().time()))
+
+def set_duty_cycle(range):
+  pi.set_PWM_dutycycle(GPIO_NUM, range)
 
 def go():
   global StartTime, ChangeFreq
@@ -112,15 +115,13 @@ Phases = get_phases()
 set_action(argSwitch)
 
 schedStart = convert_time(Phases[StartAttr])
-if Phases[StartAttr].rfind("P") > 0:
-  schedStart = schedStart  + timedelta(hours=12)
+schedStart = convert_time_to_24hour(schedStart)
+scheduledStartDateTime = datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0)
+print("Start time: {}".format(scheduledStartDateTime))
 
 pi = pigpio.pi()
 
-print("Start time: {}".format(datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0)))
-
-scheduledStart = datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0)
 sched = BlockingScheduler()
-sched.add_job(go, 'date', run_date=scheduledStart)
+sched.add_job(go, 'date', run_date=scheduledStartDateTime)
 sched.start()
 
