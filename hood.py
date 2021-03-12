@@ -1,4 +1,4 @@
-import sys, requests, json, threading, pigpio
+import sys, requests, json, threading, pigpio, logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 from datetime import datetime, timedelta
 from time import time, sleep
@@ -8,7 +8,8 @@ SWITCH_ON = "on"
 SWITCH_OFF = "off"
 
 PHASE_API_URL = 'https://api.sunrise-sunset.org/json?lat=36.7201600&lng=-4.4203400&date=today'
-LED_FULL_ON = 255
+PWM_RANGE = 25
+LED_FULL_ON = 15 #duty cycles to turn on led full
 LED_FULL_OFF = 0
 
 DAY_START_ATTR = "civil_twilight_begin"
@@ -24,6 +25,8 @@ IsOn = 0
 CurrCycle = 0
 CurrTime = datetime.now()
 ChangeFreq = 0
+logging.basicConfig(filename='/home/pi/Code/aquarium/hood/AquariumHoodLEDController/hood.log',level=logging.DEBUG)
+LoggerOn = 1
 
 class setInterval :
     def __init__(self,interval,action) :
@@ -42,9 +45,15 @@ class setInterval :
     def cancel(self) :
         self.stopEvent.set()
 
+def output_str(str):
+  if LoggerOn == 1:
+    logging.info(str)
+  else:
+    print(str)
+
 def get_phases():
   response = requests.get(PHASE_API_URL)
-  #print(response.json())
+  output_str(response.json())
   r = json.loads(response.text)
   return r["results"]
 
@@ -52,9 +61,9 @@ def convert_time(time_str):
   return datetime.strptime(time_str, '%H:%M:%S %p')
   
 def get_time_delta(start, end):
-  #add 20 min to sunrise and sunset
-  startTime = convert_time(start)
-  endTime = convert_time(end) + timedelta(minutes=20)
+  #add 20 min to beginning time, and 4o to end time
+  startTime = convert_time(start) + timedelta(minutes=20)
+  endTime = convert_time(end) + timedelta(minutes=40)
   diff = endTime - startTime
   return round(diff.total_seconds() / 60)
 
@@ -86,42 +95,53 @@ def action():
     CurrCycle -= 1
     set_duty_cycle(CurrCycle)
 
-  print('action ! -> Freq : {:.1f}s - Cycle = {} - Time = {}'.format(time()-StartTime, CurrCycle, datetime.now().time()))
+  output_str('action ! -> Freq : {:.1f}s - Cycle = {} - Time = {}'.format(time()-StartTime, CurrCycle, datetime.now().time()))
 
 def set_duty_cycle(range):
   pi.set_PWM_dutycycle(GPIO_NUM, range)
+
+def set_pwm_range():
+  pi.set_PWM_range(GPIO_NUM, PWM_RANGE)
 
 def go():
   global StartTime, ChangeFreq
   phases = Phases
   delta = get_time_delta(phases[StartAttr], phases[EndAttr])
   deltaSec = delta * 60
-  freq = round(deltaSec / 255, 4)
+  freq = round(deltaSec / LED_FULL_ON, 4)
   ChangeFreq = freq
-  print ("{0} to {1} = {2} minutes so change every {3} seconds".format(phases[StartAttr], phases[EndAttr], delta, freq))
+  output_str("{0} to {1} = {2} minutes so change every {3} seconds".format(phases[StartAttr], phases[EndAttr], delta, freq))
   StartTime = time()
   inter = setInterval(freq, action)
   t = threading.Timer(deltaSec, inter.cancel)
+  #inter = setInterval(1, action)
+  #t = threading.Timer(30, inter.cancel)	  
   t.start()
 
 argSwitch = ""
-if len(sys.argv) > 1:
-  argSwitch = sys.argv[1]
+if len(sys.argv) == 3:
+  argSwitch1 = sys.argv[1] #'on' or 'off'
+  argSwitch2 = sys.argv[2] #'now' or 'sched'
+  
 else:
-  print("Option missing. Use 'on' for turning the light on. 'Off' for off.")
+  print("Options missing:\nUse 'on' for turning the light on. 'Off' for off.\nUse 'now' to run immediately, and 'sched' to schedule.")
   quit()
 
 Phases = get_phases()
-set_action(argSwitch)
+set_action(argSwitch1)
 
-schedStart = convert_time(Phases[StartAttr])
+schedStart = convert_time(Phases[StartAttr]) + timedelta(minutes=20)
 schedStart = convert_time_to_24hour(schedStart)
 scheduledStartDateTime = datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0)
-print("Start time: {}".format(scheduledStartDateTime))
+output_str("Start time: {}".format(scheduledStartDateTime))
 
 pi = pigpio.pi()
+set_pwm_range()
 
-sched = BlockingScheduler()
-sched.add_job(go, 'date', run_date=scheduledStartDateTime)
-sched.start()
+if argSwitch2 == "now":
+  go()
+elif argSwitch2 == "sched":
+  sched = BlockingScheduler()
+  sched.add_job(go, 'date', run_date=scheduledStartDateTime)
+  sched.start()
 
