@@ -118,30 +118,33 @@ def go():
   #t = threading.Timer(30, inter.cancel)	  
   t.start()
 
-argSwitch = ""
-if len(sys.argv) == 3:
-  argSwitch1 = sys.argv[1] #'on' or 'off'
-  argSwitch2 = sys.argv[2] #'now' or 'sched'
+try:
+  argSwitch = ""
+  if len(sys.argv) == 3:
+    argSwitch1 = sys.argv[1] #'on' or 'off'
+    argSwitch2 = sys.argv[2] #'now' or 'sched'
+    
+  else:
+    print("Options missing:\nUse 'on' for turning the light on. 'Off' for off.\nUse 'now' to run immediately, and 'sched' to schedule.")
+    quit()
+
+  Phases = get_phases()
+  set_action(argSwitch1)
+
+  schedStart = convert_time(Phases[StartAttr]) + timedelta(minutes=20)
+  schedStart = convert_time_to_24hour(schedStart)
+  scheduledStartDateTime = datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0)
+  output_str("Start time: {}".format(scheduledStartDateTime))
+
+  pi = pigpio.pi()
+  set_pwm_range()
+
+  if argSwitch2 == "now":
+    go()
+  elif argSwitch2 == "sched":
+    sched = BlockingScheduler()
+    sched.add_job(go, 'date', run_date=scheduledStartDateTime)
+    sched.start()
+except Exception:
+  output_str("Exception: ", exc_info=True)
   
-else:
-  print("Options missing:\nUse 'on' for turning the light on. 'Off' for off.\nUse 'now' to run immediately, and 'sched' to schedule.")
-  quit()
-
-Phases = get_phases()
-set_action(argSwitch1)
-
-schedStart = convert_time(Phases[StartAttr]) + timedelta(minutes=20)
-schedStart = convert_time_to_24hour(schedStart)
-scheduledStartDateTime = datetime.now().replace(hour=schedStart.hour, minute=schedStart.minute, second=schedStart.second, microsecond=0)
-output_str("Start time: {}".format(scheduledStartDateTime))
-
-pi = pigpio.pi()
-set_pwm_range()
-
-if argSwitch2 == "now":
-  go()
-elif argSwitch2 == "sched":
-  sched = BlockingScheduler()
-  sched.add_job(go, 'date', run_date=scheduledStartDateTime)
-  sched.start()
-
